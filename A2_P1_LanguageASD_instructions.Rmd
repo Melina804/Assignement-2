@@ -206,6 +206,14 @@ First build the different models, then compare them to see which one is better.
 Exciting right? Let's check whether the model is doing an alright job at fitting the data. Plot the actual CHI_MLU data against the predictions of the model fitted(model). 
 
 ```{r}
+# making predictions on the basis of our model
+prediction <- fitted(Hyp_1)
+
+# Adding the prediction to the model
+clean_data$predictions <- prediction
+
+# making a plot to see how to the well we the predictions match the data 
+ggplot(clean_data, aes(x=predictions, y=CHI_MLU, group=Diagnosis, color = Diagnosis))+geom_point()+geom_smooth(method = lm) + theme_classic()
 
 ```
 
@@ -215,8 +223,8 @@ Remember to report:
 - A plain word description of the results
 - A plot of your model's predictions (and some comments on whether the predictions are sensible)
 
-[REPORT THE RESULTS]
-Linguistic development of children MLU is affected by ... [COMPLETE]
+Linguistic development of children MLU is affected by visit (b = 0.1, SD = 0.026, p < 0.05) and diagnosis (b = -0.22, SD = 0.17, p < 0.05) and their interaction (b = 0.25, SD = 0.036, p < 0.05). Overall the model's fixed effects expalins 34.29% of the varience, which isn't an optimal model, but is significantly better than the null model.
+Overall the predictions of the model seem to get better as the MLU gets higher.
 
 ## Let's test hypothesis 2: Parents speak equally to children with ASD and TD  (Exercise 3)
 
@@ -306,6 +314,8 @@ r.squaredGLMM(M12) # Explains 79,8
 
 
 # Model 8 is the model that explains most of the varience 
+
+#M13 = lmer(CHI_MLU ~ Diagnosis*ExpressiveLangRawI*(VISIT+VISIT^2) + (1|SUBJ) + (0+VISIT|SUBJ), data = clean_data)
 
 ```
 

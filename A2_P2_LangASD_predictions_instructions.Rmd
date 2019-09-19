@@ -7,6 +7,16 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+# Loading data
+Demo <- read.csv("Data/demo_train.csv")
+LU <- read.csv("Data/LU_train.csv")
+Word <- read.csv("Data/token_train.csv")
+
+Demo_test <- read.csv("Data/demo_test.csv")
+LU_Test <- read.csv("Data/LU_test.csv")
+Word_Test <- read.csv("Data/token_test.csv")
+
 ```
 
 ## Welcome to the second exciting part of the Language Development in ASD exercise
@@ -49,7 +59,7 @@ How did your models from last time perform? In this exercise you have to compare
 
 pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret)
 
-## Clean up function, included to inspire you
+## Clean up function for train data, included to inspire you
 
 CleanUpData <- function(Demo,LU,Word){
   
@@ -100,25 +110,40 @@ CleanUpData <- function(Demo,LU,Word){
 
 # Load training Data
 
+# Cleaning up the data 
+train <- CleanUpData(Demo, LU, Word)
+Test <- CleanUpData(Demo_test, LU_Test, Word_Test)
+
+# Removing NA's from the data
+train <- subset(train, !is.na(CHI_MLU)) 
+Test <- subset(Test, !is.na(CHI_MLU))
 
 #- recreate the models you chose last time (just write the code again and apply it to Train Data)
+M8 = lmer(CHI_MLU ~ Visit*Diagnosis*verbalIQ1*types_CHI + (1|Child.ID) + (0+Visit|Child.ID), data = train)
 
 
 #- calculate performance of the model on the training data: root mean square error is a good measure. (Tip: google the function rmse())
-
+rmse(train$CHI_MLU, predict(M8)) # On average we will be wrong with 0.3 morphemes wrong on the MLU
 
 
 #- create the test dataset (apply the code from assignment 1 or my function to clean up the 3 test datasets)
 # Test data
 
 #- test the performance of the models on the test data (Tips: google the functions "predict()")
+test_model <- predict(M8, Test)
+# 36 data points in the test, the MLU for each each child for each vist
 
+#Now we want to compare them to the actual MLU's from the original data. Therefore we do the rmse()
+rmse(Test$CHI_MLU, test_model) #0.5
 
+#- test the performance of the models on the test data (Tips: google the functions "predict()")
+pre_test <- predict(M8, Test)
+rmse(Test$CHI_MLU, pre_test)
+sd(train$CHI_MLU) #0.5062 - close to SD (0.9) - not good
 #- optional: predictions are never certain, can you identify the uncertainty of the predictions? (e.g. google predictinterval())
 
 ```
-
-[HERE GOES YOUR ANSWER]
+The predictions for the training set gave us a root mean square value (rmse-value) of 0.3, which means that whenever we try to predict a value, we can expect an error of 0.3. This value is 3 times smaller then the SD that the mean makes when explaining the data. This suggests that our the model is much better than the null model. For the testing set, the root mean square value (rmse-value) was 0.5, which is a bit closer to the SD of 0.9, which suggests that our model is better, but still leaves error to be explained (0.4 to be exact).
 
 ### Exercise 2) Model Selection via Cross-validation (N.B: ChildMLU!)
 
@@ -137,7 +162,15 @@ In this exercise you have to use cross-validation to calculate the predictive er
 
 
 ```{r}
+# First we change Child:ID to ensure that there isn't any overlapping ID's 
+Test$Child.ID <- as.integer(Test$Child.ID)
+Test$Child.ID <- Test$Child.ID+1000
+
+# Merging the 2 datasets to one big dataset 
+All_Data <- rbind(train, Test)
+
 #- Create the basic model of ChildMLU as a function of Time and Diagnosis (don't forget the random effects!).
+null_model <- lmer(CHI_MLU ~ Visit*Diagnosis + (1|Child.ID) + (0+Visit|Child.ID), data = All_Data)
 
 #- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
 
