@@ -174,15 +174,77 @@ null_model <- lmer(CHI_MLU ~ Visit*Diagnosis + (1|Child.ID) + (0+Visit|Child.ID)
 
 #- Make a cross-validated version of the model. (Tips: google the function "createFolds";  loop through each fold, train a model on the other folds and test it on the fold)
 
-#- Report the results and comment on them. 
+folds <- createFolds(unique(All_Data$Child.ID), k=5,list = TRUE)
+folds
+#make counter
+n = 1
+#no data list
+RMSETrain = NULL
+RMSETest = NULL
+
+for (i in folds) { 
+  TrainSub <- subset(All_Data, !(Child.ID%in%i))
+  TestSub <- subset(All_Data, (Child.ID%in%i)) #put in test data if problem
+  
+  null_model <- lmer(CHI_MLU ~ Visit*Diagnosis + (1|Child.ID) + (0+Visit|Child.ID), data = TrainSub)
+  train_predict <- predict(null_model)
+  
+  test_predict <- predict(null_model, newdata=TestSub, allow.new.levels = TRUE)
+  
+  RMSETrain[n]=rmse(TrainSub$CHI_MLU, train_predict)
+  RMSETest[n]=rmse(TestSub$CHI_MLU, test_predict)
+  n=n+1
+}
+
+RMSETrain
+RMSETest
+
+# Taking the mean of the test and train data to get numbers we can compare 
+mean(RMSETrain) #0.3461653
+mean(RMSETest) #0.7483976
 
 #- Now try to find the best possible predictive model of ChildMLU, that is, the one that produces the best cross-validated results.
+
+folds <- createFolds(unique(All_Data$Child.ID), k=5,list = TRUE)
+folds
+#make counter
+n = 1
+#no data list
+RMSETrain = NULL
+RMSETest = NULL
+
+for (i in folds) { 
+  TrainSub <- subset(All_Data, !(Child.ID%in%i))
+  TestSub <- subset(All_Data, (Child.ID%in%i)) #put in test data if problem
+  
+  M8 <- lmer(CHI_MLU ~ Visit * Diagnosis * verbalIQ1 *types_CHI+ (1|Child.ID) + (0 + Visit|Child.ID), TrainSub)
+  train_predict <- predict(M8)
+  
+  test_predict <- predict(M8, newdata=TestSub, allow.new.levels = TRUE)
+  
+  RMSETrain[n]=rmse(TrainSub$CHI_MLU, train_predict)
+  RMSETest[n]=rmse(TestSub$CHI_MLU, test_predict)
+  n=n+1
+}
+
+RMSETrain
+RMSETest
+
+# Taking the mean of the test and train data to get numbers we can compare 
+mean(RMSETrain) # 0.304862
+mean(RMSETest) # 0.4464621
+
+# calculating the 
+sd(All_Data$CHI_MLU)
+
+#- Report the results and comment on them. 
+# The NUll model preforms good on training (RMSE = 0.35) but seems to overfit and thereby increase to RMSE = 0.76. The alternative model performes well on training (RMSE = 0.3) and doesn't increase much in testing (RMSE = 0.45). Models are assumed to be "good" if their RMSE values are a bit lower then the standard diviation of Child MLU (0.93).
 
 # Bonus Question 1: What is the effect of changing the number of folds? Can you plot RMSE as a function of number of folds?
 # Bonus Question 2: compare the cross-validated predictive error against the actual predictive error on the test data
 ```
 
-[HERE GOES YOUR ANSWER]
+The NUll model preforms good on training (RMSE = 0.35) but seems to overfit and thereby increase to RMSE = 0.76. The alternative model performes well on training ((RMSE = 0.3) and doesn't increase much in testing ((RMSE = 0.45). Models are assumed to be "good" if their RMSE values are a bit lower then the standard diviation of Child MLU (0.93).
 
 ### Exercise 3) Assessing the single child
 
