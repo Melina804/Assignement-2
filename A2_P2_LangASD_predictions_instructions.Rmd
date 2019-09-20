@@ -238,7 +238,7 @@ mean(RMSETest) # 0.4464621
 sd(All_Data$CHI_MLU)
 
 #- Report the results and comment on them. 
-# The NUll model preforms good on training (RMSE = 0.35) but seems to overfit and thereby increase to RMSE = 0.76. The alternative model performes well on training (RMSE = 0.3) and doesn't increase much in testing (RMSE = 0.45). Models are assumed to be "good" if their RMSE values are a bit lower then the standard diviation of Child MLU (0.93).
+# The NUll model preforms well on training (RMSE = 0.35) but seems to overfit and thereby increase to RMSE = 0.76. The alternative model performes well on training (RMSE = 0.3) and doesn't increase much in testing (RMSE = 0.45). Models are assumed to be "good" if their RMSE values are a bit lower then the standard diviation of Child MLU (0.93).
 
 # Bonus Question 1: What is the effect of changing the number of folds? Can you plot RMSE as a function of number of folds?
 # Bonus Question 2: compare the cross-validated predictive error against the actual predictive error on the test data
@@ -260,10 +260,125 @@ You want to evaluate:
 
 ```{r}
 
+# Filter Bernie fra 
+Bernie <- filter(LU_Test, LU_Test$SUBJ == "Bernie.")
+
+# Filter TD kids from the merged dataset 
+TD_kids<- filter(All_Data, All_Data$Diagnosis == "TD")
+
+# Making dataframe for TD visit 1
+TD_kids_V1 <- filter(TD_kids, TD_kids$Visit == "1")
+
+TD_kids_V2 <- filter(TD_kids, TD_kids$Visit == "2")
+
+TD_kids_V3 <- filter(TD_kids, TD_kids$Visit == "3")
+
+TD_kids_V4 <- filter(TD_kids, TD_kids$Visit == "4")
+
+TD_kids_V5 <- filter(TD_kids, TD_kids$Visit == "5")
+
+TD_kids_V6 <- filter(TD_kids, TD_kids$Visit == "6")
+
+# Valculating the mean for each TD visit 
+mean(TD_kids_V1$CHI_MLU)
+mean(TD_kids_V2$CHI_MLU)
+mean(TD_kids_V3$CHI_MLU)
+mean(TD_kids_V4$CHI_MLU)
+mean(TD_kids_V5$CHI_MLU)
+mean(TD_kids_V6$CHI_MLU)
+
+# Adding the mean value to the data frames 
+TD_kids_V1$mean <- mean(TD_kids_V1$CHI_MLU)
+TD_kids_V2$mean <- mean(TD_kids_V2$CHI_MLU)
+TD_kids_V3$mean <- mean(TD_kids_V3$CHI_MLU)
+TD_kids_V4$mean <- mean(TD_kids_V4$CHI_MLU)
+TD_kids_V5$mean <- mean(TD_kids_V5$CHI_MLU)
+TD_kids_V6$mean <- mean(TD_kids_V6$CHI_MLU)
+
+# Making dataframes for Bernies visits 
+Bernie_V1 <- filter(Bernie, Bernie$VISIT == "Visit1.")
+Bernie_V2 <- filter(Bernie, Bernie$VISIT == "Visit2.")
+Bernie_V3 <- filter(Bernie, Bernie$VISIT == "visit3.")
+Bernie_V4 <- filter(Bernie, Bernie$VISIT == "visit4.")
+Bernie_V5 <- filter(Bernie, Bernie$VISIT == "Visit5.")
+Bernie_V6 <- filter(Bernie, Bernie$VISIT == "Visit6.")
+
+#Calcualting absolute values 
+mean(TD_kids_V1$CHI_MLU) - Bernie_V1$CHI_MLU 
+mean(TD_kids_V2$CHI_MLU) - Bernie_V2$CHI_MLU 
+mean(TD_kids_V3$CHI_MLU) - Bernie_V3$CHI_MLU 
+mean(TD_kids_V4$CHI_MLU) - Bernie_V4$CHI_MLU 
+mean(TD_kids_V5$CHI_MLU) - Bernie_V5$CHI_MLU 
+mean(TD_kids_V6$CHI_MLU) - Bernie_V6$CHI_MLU 
+
+
+# Renaming and chanching variables to prepare data merge
+Bernie<- rename(Bernie, Child.ID=SUBJ)
+Bernie<- rename(Bernie, Visit=VISIT)
+Bernie$Visit <- str_replace_all(Bernie$Visit, "[:punct:]", "")
+Bernie$Visit <- str_extract(Bernie$Visit, "\\d")
+
+TD_All <- select(TD_kids, Child.ID, Visit, Diagnosis, CHI_MLU)
+Bern <- select(Bernie, Child.ID, Visit, CHI_MLU)
+Bern$Diagnosis <- "ASD"
+Bern$Diagnosis <- as.factor(Bern$Diagnosis)
+TD_All$Child.ID <- as.character(TD_All$Child.ID)
+
+# Merging dataframes with rbind 
+Bern_All <- rbind(TD_All, Bern)
+
+# Finally plotting the data
+ggplot(Bern_All, aes(x = Visit, y = CHI_MLU, group=Diagnosis, color=Diagnosis))+ 
+         geom_smooth(method = lm)+ geom_point()+ theme_classic()
+
+
+## Predicting Bernie from our model
+
+# Getting Bernie from alle the test data sets
+LU_Bernie <- filter(LU_Test, SUBJ == "Bernie.")
+Word_Bernie <- filter(Word_Test, SUBJ =="Bernie.")
+Demo_Bernie <- filter(Demo_test, Child.ID == "Bernie")
+
+# Chaning coloumn names in Demo
+Demo_Bernie <- rename(Demo_Bernie, SUBJ = Child.ID, VISIT = Visit)
+LU_Bernie$VISIT <- str_extract(LU_Bernie$VISIT, "\\d")
+Word_Bernie$VISIT <- str_extract(Word_Bernie$VISIT, "\\d")
+
+# Removing punctuation in subj colomn 
+Demo_Bernie$SUBJ <- str_replace_all(Demo_Bernie$SUBJ, "[:punct:]", "")
+LU_Bernie$SUBJ <- str_replace_all(LU_Bernie$SUBJ, "[:punct:]", "")
+Word_Bernie$SUBJ <- str_replace_all(Word_Bernie$SUBJ, "[:punct:]", "")
+
+# Mergeing alle the Bernies 
+New_Bernie <- merge(LU_Bernie, Word_Bernie)
+New_Bernie <-merge(New_Bernie, Demo_Bernie)
+
+New_Bernie <- rename(New_Bernie, Child.ID = SUBJ, Visit = VISIT)
+
+New_Bernie$Diagnosis <- "ASD"
+New_Bernie$Diagnosis <- as.factor(New_Bernie$Diagnosis)
+New_Bernie$Visit <- as.integer(New_Bernie$Visit)
+
+New_Bernie <- select(New_Bernie, Child.ID, Visit, Diagnosis, ExpressiveLangRaw, types_CHI, CHI_MLU)
+
+New_Bernie <- subset(New_Bernie, !is.na(CHI_MLU))
+New_Bernie <- subset(New_Bernie, !is.na(ExpressiveLangRaw))
+
+#making predictions
+M8 <- lmer(CHI_MLU ~ Visit*Diagnosis*ExpressiveLangRaw*types_CHI + (1|Child.ID) + (0+Visit|Child.ID), data = All_Data)
+train_Bernie <- predict(M8, newdata=New_Bernie, allow.new.levels = TRUE)
+RMSE_bernie=rmse(New_Bernie$CHI_MLU, train_Bernie)
+RMSE_bernie #0.40
+
+sd(New_Bernie$CHI_MLU) #1.03
+
+
 ```
 
 
-[HERE GOES YOUR ANSWER]
+Overall Bernie has a higher MLU at each visit compared to the average TD-kid. He starts out with a value of 0.67 morphemes higher at first visit and develops faster than the TD kids for each visit, which can be seen by the fact that he ends out speaking 1.53 morphemes more than the average TD kid in the end.
+
+The predictions for Bernie seem to be good, as the RMSE value is 0.4, which is much lower than the standard deviation of the mean (SD = 1.04), which is the NULL-model.
 
 ### OPTIONAL: Exercise 4) Model Selection via Information Criteria
 Another way to reduce the bad surprises when testing a model on new data is to pay close attention to the relative information criteria between the models you are comparing. Let's learn how to do that!
