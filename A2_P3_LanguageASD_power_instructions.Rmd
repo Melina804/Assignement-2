@@ -7,6 +7,92 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+install.packages("simr", dependencies = TRUE)
+library(lmerTest)
+library(lme4)
+library(tidyverse)
+pacman::p_load(readr,dplyr,stringr,lmerTest,Metrics,caret, simr)
+model1 <- glmer(z ~ x + (1|g), family="poisson", data=simdata)
+summary(model1)
+
+# Loading data
+Demo <- read.csv("Data/demo_train.csv")
+LU <- read.csv("Data/LU_train.csv")
+Word <- read.csv("Data/token_train.csv")
+
+Demo_test <- read.csv("Data/demo_test.csv")
+LU_Test <- read.csv("Data/LU_test.csv")
+Word_Test <- read.csv("Data/token_test.csv")
+
+## Clean up function for train data, included to inspire you
+
+CleanUpData <- function(Demo,LU,Word){
+  
+  Speech <- merge(LU, Word) %>% 
+    rename(
+      Child.ID = SUBJ, 
+      Visit=VISIT) %>%
+    mutate(
+      Visit = as.numeric(str_extract(Visit, "\\d")),
+      Child.ID = gsub("\\.","", Child.ID)
+      ) %>%
+    dplyr::select(
+      Child.ID, Visit, MOT_MLU, CHI_MLU, types_MOT, types_CHI, tokens_MOT, tokens_CHI
+    )
+  
+  Demo <- Demo %>%
+    dplyr::select(
+      Child.ID, Visit, Ethnicity, Diagnosis, Gender, Age, ADOS, MullenRaw, ExpressiveLangRaw, Socialization
+    ) %>%
+    mutate(
+      Child.ID = gsub("\\.","", Child.ID)
+    )
+    
+  Data=merge(Demo,Speech,all=T)
+  
+  Data1= Data %>% 
+     subset(Visit=="1") %>% 
+     dplyr::select(Child.ID, ADOS, ExpressiveLangRaw, MullenRaw, Socialization) %>%
+     rename(Ados1 = ADOS, 
+            verbalIQ1 = ExpressiveLangRaw, 
+            nonVerbalIQ1 = MullenRaw,
+            Socialization1 = Socialization) 
+  
+  Data=merge(Data, Data1, all=T) %>%
+    mutate(
+      Child.ID = as.numeric(as.factor(as.character(Child.ID))),
+      Visit = as.numeric(as.character(Visit)),
+      Gender = recode(Gender, 
+         "1" = "M",
+         "2" = "F"),
+      Diagnosis = recode(Diagnosis,
+         "A"  = "TD",
+         "B"  = "ASD")
+    )
+
+  return(Data)
+}
+
+# Load training Data
+
+# Cleaning up the data 
+train <- CleanUpData(Demo, LU, Word)
+Test <- CleanUpData(Demo_test, LU_Test, Word_Test)
+
+# Removing NA's from the data
+train <- subset(train, !is.na(CHI_MLU)) 
+Test <- subset(Test, !is.na(CHI_MLU))
+
+#- recreate the models you chose last time (just write the code again and apply it to Train Data)
+M8 = lmer(CHI_MLU ~ Visit*Diagnosis*verbalIQ1*types_CHI + (1|Child.ID) + (0+Visit|Child.ID), data = train)
+
+Test$Child.ID <- as.integer(Test$Child.ID)
+Test$Child.ID <- Test$Child.ID+1000
+
+# Merging the 2 datasets to one big dataset 
+All_Data <- rbind(train, Test)
+
+
 ```
 
 ## Welcome to the third exciting part of the Language Development in ASD exercise
@@ -38,9 +124,42 @@ You will be using:
 - extend() to simulate more participants
 
 ```{r}
+# Chaning to factor
+All_Data$Child.ID <- as.factor(All_Data$Child.ID)
+
+# Defining our model
+model1 <- lmer(CHI_MLU ~ Visit+Diagnosis + (1+Visit|Child.ID), data = All_Data)
+
+# power test
+powerSim(model1, test=fixed ("Visit"), nsim=50)
+
+# power test
+powerSim(model1, test=fixed ("Diagnosis"), nsim=50)
+
+# The power simulation showed that we get a power of 100% for visit, and 38% of diagnosis, meaning that we have a 0% chance that we have to little power to find an effect if the effect exisit, in visit and 62% that we have to little power to find an effect if the effect exisits. 
+
+# power test
+powerSim(model1, test=fixed ("Visit"), nsim=200)
+
+# power test
+powerSim(model1, test=fixed ("Diagnosis"), nsim=200)
+
+# Test how many participants you would have to have to replicate the findings (assuming the findings are correct)
+#First we extend our model to include 500 participants
+powerCurveModel <- extend(model, along="Child.ID", n=500)
+
+#Now we want to see how many participants we need to get a power of 80% (this is an arbitrary threshold). The powerCurve function creates a coordinate system with power on the y-axis and participants on the x-axis. At some point the curve will reach the 80% power, and the x-axis will then indicate how many participants we need
+pc <- powerCurve(model, along="Child.ID")
+Power_Curve_Model <- extend(model1, along="Child.ID", n=500)
+pc3 <- powerCurve(Power_Curve_Model, along="Child.ID")
+plot(pc3)
 
 ```
+Report the power analysis and comment on what you can (or cannot) use its estimates for.
 
+Using the model, lmer(CHI_MLU ~ Visit+Diagnosis + (1+Visit|Child.ID), data = merged_data), we tested power with 50 simulations and then 200 simulations for the fixed effects "Visit" and "Diagnosis". We got a power of 100% for the fixed effect of Visit (conf = 98.17, 100.0 with an significant effect size of 0.23) and a power of 41% for the fixed effect of Diagnosis (conf = 34.11, 48.16 with a significant effect size of 0.23). This means that we for Visit have a 100% chance of detecting an effect if it exists (given that the null-hypothesis is true) and a 41% chance for Diagnosis and thus a 69% risk of not having enough power to detect an effect if an effect exists.
+
+What we can see from the powercurve is that we will need a minimum of 9-10 participants in order to have a power of 80%.
 
 ### Exercise 2
 
@@ -52,9 +171,37 @@ How would you perform a more conservative power analysis?
 - Report the power analysis and comment on what you can (or cannot) use its estimates for.
 
 ```{r}
+# Testen which effect size is acceptable
+fixef(model1)["Visit"] <- 0.05
+summary(model1)
+powerSim(model1, test = fixed("Visit"), nsim=50)
 
+fixef(model1)["Visit"] <- 0.08
+summary(model1)
+powerSim(model1, test = fixed("Visit"), nsim=50)
+
+fixef(model1)["Visit"] <- 0.072
+summary(model1)
+powerSim(model1, test = fixed("Visit"), nsim=50)
+
+
+All_Data$Diagnosis <- as.integer(All_Data$Diagnosis)
+fixef(model1)["Diagnosis"] <- 0.49
+summary(model1)
+powerSim(model1, test = fixed("Diagnosis"), nsim=50)
+
+#Now that we have determined the minumum effect sizes we can run the powerCurve again
+powerCurveModel <- extend(model1, along="Child.ID", n=500)
+
+pc <- powerCurve(model1, along="Child.ID")
+
+plot(pc)
 ```
+From our power simulation (50 simulations) using an effect size of 0.072 for the fixed effect Visit we get a power of 92% (confidence interval: 80.77, 97.78). This means that our minumum effect size has to be 0.072 in order for our fixed effect Visit to have a power of 80%. We made sure that a power of 80% is inside the minimum of the confidence interval in order to make sure that we will always get a power of at least 80% when we perform a power simulation.
 
+In the samw way we tested the fixed effect Diagnosis, and the minimum fixed effect has to be 0.5 here to get a power of 92% with a confidence interval that is above 80% (80.77, 97.78).
+
+From the powercurve we can see that we need at least 60 participants in order to have a power of 80%. Because we have used the minim effect sizes we need more participants in order to get a power of 80%.
 
 ### Exercise 3
 
@@ -62,4 +209,17 @@ Assume you have only the resources to collect 30 kids (15 with ASD and 15 TDs). 
 
 ```{r}
 
+TD <- filter(All_Data, Diagnosis == "TD")
+ASD <- filter(All_Data, Diagnosis == "ASD")
+TD <- TD[1:86,] #here we have 15 subj
+ASD <- ASD[1:88,] #here we have 15 subj
+kids <- rbind(TD, ASD)
+
+#make model
+model_kids <- lmer(CHI_MLU ~ Visit+Diagnosis + (1+Visit|Child.ID), data = kids)
+
+#identifying 
+powerSim(model_kids, test = fixed("Diagnosis"), nsim=50)
+powerSim(model_kids, test = fixed("Visit"), nsim=50)
 ```
+When using only 30 kids (15 ASD, 15 TD) we get a power of 20% (confidence interval: 10.03, 33.72) for Diagnosis and a power of 100% for visit (confidence interval: 10.03, 33.72). Based on these values we can decide that Diagnosis has too low power and therefore the study doesn't make much sense, as we won't be able to detect any effect of diagnosis, eventhough it might be there
